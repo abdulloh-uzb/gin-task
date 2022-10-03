@@ -18,6 +18,6 @@ func main() {
 	r := gin.Default()
 
 	r.POST("/product", controllers.CreateProduct)
-
+	r.PUT("/update/:id", controllers.UpdateProduct)
 	r.Run()
 }

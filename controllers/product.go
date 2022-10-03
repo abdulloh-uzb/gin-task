@@ -37,8 +37,12 @@ func CreateProduct(c *gin.Context) {
 
 		resp.Stores = append(resp.Stores, respstore)
 	}
-	fmt.Println(resp)
-	config.DB.QueryRow("insert into product (name,category,type, price) values($1,$2,$3,$4) returning id, name, price, category, type", product.Name, product.Category, product.Type, product.Price).Scan(&resp.ID, &resp.Name, &resp.Price, &resp.Category, &resp.Type)
+
+	fmt.Println("this is product name", product.Category, product.Name, product.Type, product.Price)
+	err := config.DB.QueryRow("insert into product (name,category,type, price) values($1,$2,$3,$4) returning id, name, price, category, type", product.Name, product.Category, product.Type, product.Price).Scan(&resp.ID, &resp.Name, &resp.Price, &resp.Category, &resp.Type)
+	if err != nil {
+		fmt.Println(err)
+	}
 	for _, sID := range stroreIDs {
 		config.DB.Exec("insert into store_products (store_id, product_id) values($1,$2)", sID, resp.ID)
 	}
@@ -46,4 +50,47 @@ func CreateProduct(c *gin.Context) {
 	c.JSON(http.StatusAccepted, gin.H{
 		"product": resp,
 	})
+}
+
+func UpdateProduct(c *gin.Context) {
+
+	product := models.Product{}
+	id := c.Param("id")
+	c.ShouldBindJSON(&product)
+
+	_, err := config.DB.Exec("update product set name=$1, price=$2, type=$3, category=$4 where id=$5", product.Name, product.Price, product.Type, product.Category, id)
+
+	if err != nil {
+		c.JSON(http.StatusAccepted, gin.H{
+			"err":   err,
+			"error": "error while update product",
+		})
+	}
+
+	if len(product.Stores) > 0 {
+		for _, store := range product.Stores {
+			_, err := config.DB.Exec("update stores set name=$1 where id=$2", store.Name, store.ID)
+			if err != nil {
+				fmt.Println("error while updating stores", err)
+				return
+			}
+			if len(store.Addresses) > 0 {
+				for _, address := range store.Addresses {
+					_, err := config.DB.Exec("update addresses set street=$1, district=$2 where id=$3", address.Street, address.District, store.ID)
+					if err != nil {
+						fmt.Println("error while insert into addresses", err)
+						return
+					}
+				}
+			}
+		}
+	}
+
+	c.JSON(http.StatusAccepted, gin.H{
+		"product": product,
+	})
+}
+
+func GetProduct(c *gin.Context) {
+
 }
