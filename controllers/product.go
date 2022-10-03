@@ -1,0 +1,49 @@
+package controllers
+
+import (
+	"fmt"
+	"net/http"
+	"v1/models"
+
+	"v1/config"
+
+	"github.com/gin-gonic/gin"
+)
+
+func CreateProduct(c *gin.Context) {
+	product := models.Product{}
+	var resp models.Product
+	c.ShouldBindJSON(&product)
+	var stroreIDs []int
+	for _, store := range product.Stores {
+		var respstore models.Store
+		err := config.DB.QueryRow("insert into stores (name) values($1) returning id, name", store.Name).Scan(&respstore.ID, &respstore.Name)
+		if err != nil {
+			fmt.Println("error while insert into stores", err)
+			return
+		}
+		fmt.Println(respstore.Name)
+		stroreIDs = append(stroreIDs, respstore.ID)
+		for _, address := range store.Addresses {
+			var respAddress models.Address
+			err = config.DB.QueryRow("insert into addresses (street, district, store_id) values($1,$2, $3) returning id, district, street, store_id", address.Street, address.District, store.ID).Scan(&respAddress.ID, &respAddress.District, &respAddress.Street, &respAddress.StoreID)
+			if err != nil {
+				fmt.Println("error while insert into addresses", err)
+				return
+			}
+			fmt.Println(respAddress)
+			respstore.Addresses = append(respstore.Addresses, respAddress)
+		}
+
+		resp.Stores = append(resp.Stores, respstore)
+	}
+	fmt.Println(resp)
+	config.DB.QueryRow("insert into product (name,category,type, price) values($1,$2,$3,$4) returning id, name, price, category, type", product.Name, product.Category, product.Type, product.Price).Scan(&resp.ID, &resp.Name, &resp.Price, &resp.Category, &resp.Type)
+	for _, sID := range stroreIDs {
+		config.DB.Exec("insert into store_products (store_id, product_id) values($1,$2)", sID, resp.ID)
+	}
+	fmt.Println(resp)
+	c.JSON(http.StatusAccepted, gin.H{
+		"product": resp,
+	})
+}
